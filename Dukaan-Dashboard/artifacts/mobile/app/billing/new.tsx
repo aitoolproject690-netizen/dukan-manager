@@ -40,39 +40,74 @@ export default function NewBillScreen() {
   const [saving, setSaving] = useState(false);
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]);
-  const discountAmt = useMemo(() => Math.min(parseFloat(discount) || 0, subtotal), [discount, subtotal]);
+  const discountAmt = useMemo(() => Math.min(Math.max(parseFloat(discount) || 0, 0), subtotal), [discount, subtotal]);
   const total = useMemo(() => subtotal - discountAmt, [subtotal, discountAmt]);
 
   const computeAmounts = useCallback(() => {
     if (payMethod === 'cash') return { cash: total, upi: 0, credit: 0 };
     if (payMethod === 'upi') return { cash: 0, upi: total, credit: 0 };
     if (payMethod === 'credit') return { cash: 0, upi: 0, credit: total };
-    const cash = Math.min(parseFloat(cashInput) || 0, total);
-    const upi = Math.min(parseFloat(upiInput) || 0, total - cash);
+    const rawCash = Math.max(0, parseFloat(cashInput) || 0);
+    const rawUpi = Math.max(0, parseFloat(upiInput) || 0);
+    const cash = Math.min(rawCash, total);
+    const upi = Math.min(rawUpi, Math.max(0, total - cash));
     return { cash, upi, credit: Math.max(0, total - cash - upi) };
   }, [payMethod, total, cashInput, upiInput]);
 
   const addToCart = useCallback((product: Product) => {
+    if (product.stock <= 0) {
+      Alert.alert('Out of Stock', `${product.name} is out of stock.`);
+      return;
+    }
     setCart(prev => {
       const idx = prev.findIndex(i => i.product_id === product.id);
-      if (idx >= 0) return prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i);
+      if (idx >= 0) {
+        const current = prev[idx];
+        if (current.quantity >= product.stock) {
+          Alert.alert('Stock Limit', `Only ${product.stock} ${product.unit || 'unit'} available for ${product.name}.`);
+          return prev;
+        }
+        return prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i);
+      }
       return [...prev, { product_id: product.id, product_name: product.name, quantity: 1, price: product.selling_price, purchase_price: product.purchase_price, unit: product.unit }];
     });
     setShowProdModal(false);
   }, []);
 
   const updateQty = useCallback((index: number, qty: number) => {
-    setCart(prev => qty <= 0 ? prev.filter((_, i) => i !== index) : prev.map((item, i) => i === index ? { ...item, quantity: qty } : item));
-  }, []);
+    setCart(prev => {
+      if (qty <= 0) return prev.filter((_, i) => i !== index);
+      const item = prev[index];
+      const product = products.find(p => p.id === item?.product_id);
+      if (product && qty > product.stock) {
+        Alert.alert('Stock Limit', `Only ${product.stock} ${product.unit || 'unit'} available for ${product.name}.`);
+        return prev;
+      }
+      return prev.map((it, i) => i === index ? { ...it, quantity: qty } : it);
+    });
+  }, [products]);
 
   const handleSave = async () => {
     if (cart.length === 0) { Alert.alert('Empty Cart', 'Add at least one product'); return; }
-    if ((payMethod === 'credit' || (payMethod === 'mixed' && computeAmounts().credit > 0)) && !customer) {
+    const { cash, upi, credit } = computeAmounts();
+    if (total <= 0) { Alert.alert('Invalid Total', 'Bill total must be greater than zero.'); return; }
+    if ((payMethod === 'credit' || (payMethod === 'mixed' && credit > 0)) && !customer) {
       Alert.alert('Customer Required', 'Select a customer to record credit'); return;
+    }
+    const invalidItem = cart.find(item => {
+      const product = products.find(p => p.id === item.product_id);
+      return !product || product.stock < item.quantity;
+    });
+    if (invalidItem) {
+      Alert.alert('Stock Changed', `${invalidItem.product_name} does not have enough stock now. Please update the cart.`);
+      return;
+    }
+    if (payMethod === 'mixed' && cash + upi > total + 0.01) {
+      Alert.alert('Invalid Payment', 'Cash + UPI cannot be greater than the bill total.');
+      return;
     }
     setSaving(true);
     try {
-      const { cash, upi, credit } = computeAmounts();
       const pm = credit > 0 && cash === 0 && upi === 0 ? 'credit' : credit > 0 ? 'mixed' : cash > 0 && upi === 0 ? 'cash' : 'upi';
       const sale = await addSale({
         customer_id: customer?.id ?? null, customer_name: customer?.name ?? '',
@@ -82,7 +117,8 @@ export default function NewBillScreen() {
       }, cart, settings.invoice_prefix);
       router.replace(`/billing/${sale.id}` as any);
     } catch (e) {
-      Alert.alert('Error', 'Failed to save. Try again.');
+      const message = e instanceof Error ? e.message : '';
+      Alert.alert('Could not create bill', message || 'Stock or payment data changed. Please check the bill and try again.');
     } finally { setSaving(false); }
   };
 
@@ -109,7 +145,6 @@ export default function NewBillScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: botPad + 20 }]} keyboardShouldPersistTaps="handled">
 
-          {/* Customer */}
           <Text style={[styles.sec, { color: colors.mutedForeground }]}>CUSTOMER (Optional)</Text>
           <TouchableOpacity style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card }]} onPress={() => { setCustSearch(''); setShowCustModal(true); }}>
             {customer ? (
@@ -134,7 +169,6 @@ export default function NewBillScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Cart */}
           <Text style={[styles.sec, { color: colors.mutedForeground }]}>ITEMS ({cart.length})</Text>
           {cart.map((item, idx) => (
             <CartItemComponent key={`${item.product_id}-${idx}`} item={item} index={idx} onUpdateQty={updateQty} onRemove={(i) => updateQty(i, 0)} currencySymbol={sym} />
@@ -146,7 +180,6 @@ export default function NewBillScreen() {
 
           {cart.length > 0 && (
             <>
-              {/* Summary */}
               <Text style={[styles.sec, { color: colors.mutedForeground }]}>BILL SUMMARY</Text>
               <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.card, gap: 12, padding: 14 }]}>
                 <View style={styles.row}>
@@ -155,14 +188,7 @@ export default function NewBillScreen() {
                 </View>
                 <View style={styles.row}>
                   <Text style={[styles.sLabel, { color: colors.mutedForeground }]}>Discount ({sym})</Text>
-                  <TextInput
-                    style={[styles.discInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-                    value={discount}
-                    onChangeText={setDiscount}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
+                  <TextInput style={[styles.discInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]} value={discount} onChangeText={setDiscount} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.mutedForeground} />
                 </View>
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
                 <View style={styles.row}>
@@ -171,7 +197,6 @@ export default function NewBillScreen() {
                 </View>
               </View>
 
-              {/* Payment */}
               <Text style={[styles.sec, { color: colors.mutedForeground }]}>PAYMENT METHOD</Text>
               <View style={styles.payRow}>
                 {PAY_METHODS.map(pm => (
@@ -196,7 +221,6 @@ export default function NewBillScreen() {
                 </View>
               )}
 
-              {/* Notes */}
               <TextInput style={[styles.notesInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card }]} placeholder="Note (optional)" placeholderTextColor={colors.mutedForeground} value={notes} onChangeText={setNotes} multiline numberOfLines={2} />
             </>
           )}
@@ -210,7 +234,6 @@ export default function NewBillScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Product Modal */}
       <Modal visible={showProdModal} animationType="slide" onRequestClose={() => setShowProdModal(false)}>
         <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHdr, { borderBottomColor: colors.border, paddingTop: (Platform.OS === 'ios' ? insets.top : 20) + 8 }]}>
@@ -222,7 +245,6 @@ export default function NewBillScreen() {
         </View>
       </Modal>
 
-      {/* Customer Modal */}
       <Modal visible={showCustModal} animationType="slide" onRequestClose={() => setShowCustModal(false)}>
         <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHdr, { borderBottomColor: colors.border, paddingTop: (Platform.OS === 'ios' ? insets.top : 20) + 8 }]}>
