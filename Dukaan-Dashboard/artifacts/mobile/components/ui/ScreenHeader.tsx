@@ -11,36 +11,36 @@ interface ScreenHeaderProps {
   onBack?: () => void;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRight?: () => void;
+  onRightPress?: () => void;
   rightLabel?: string;
   rightColor?: string;
+  rightIconColor?: string;
 }
 
-export function ScreenHeader({ title, subtitle, onBack, rightIcon, onRight, rightLabel, rightColor }: ScreenHeaderProps) {
+export function ScreenHeader({ title, subtitle, onBack, rightIcon, onRight, onRightPress, rightLabel, rightColor, rightIconColor }: ScreenHeaderProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const pt = Platform.OS === 'web' ? 67 + 8 : insets.top + 8;
+  const rightAction = onRight ?? onRightPress;
+  const iconColor = rightIconColor ?? rightColor ?? colors.foreground;
 
   return (
     <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: pt }]}>
       <View style={styles.row}>
-        <TouchableOpacity
-          onPress={onBack ?? (() => router.back())}
-          style={styles.iconBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
+        <TouchableOpacity onPress={onBack ?? (() => router.back())} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.center}>
           <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>{title}</Text>
           {subtitle ? <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>{subtitle}</Text> : null}
         </View>
-        {rightLabel && onRight ? (
-          <TouchableOpacity onPress={onRight} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        {rightLabel && rightAction ? (
+          <TouchableOpacity onPress={rightAction} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={[styles.rightLabel, { color: rightColor ?? colors.primary }]}>{rightLabel}</Text>
           </TouchableOpacity>
-        ) : rightIcon && onRight ? (
-          <TouchableOpacity onPress={onRight} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={rightIcon} size={24} color={rightColor ?? colors.foreground} />
+        ) : rightIcon && rightAction ? (
+          <TouchableOpacity onPress={rightAction} style={styles.iconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name={rightIcon} size={24} color={iconColor} />
           </TouchableOpacity>
         ) : <View style={styles.iconBtn} />}
       </View>
