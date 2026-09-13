@@ -3,6 +3,12 @@ import { db, syncOperations } from "@workspace/db";
 import { and, asc, eq, gt, max } from "drizzle-orm";
 
 const router = Router();
+const SYNC_TOKEN = process.env.SYNC_TOKEN?.trim() || "";
+
+function authorized(req: any): boolean {
+  const token = typeof req.headers?.["x-sync-token"] === "string" ? req.headers["x-sync-token"].trim() : "";
+  return !!SYNC_TOKEN && !!token && token === SYNC_TOKEN;
+}
 
 function validOperation(op: any): boolean {
   return !!op && typeof op.operationId === "string" && !!op.operationId &&
@@ -13,6 +19,7 @@ function validOperation(op: any): boolean {
 }
 
 router.post("/sync/push", async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ ok: false, error: "Sync authorization required" });
   const shopId = typeof req.body?.shopId === "string" ? req.body.shopId.trim() : "";
   const deviceId = typeof req.body?.deviceId === "string" ? req.body.deviceId.trim() : "";
   const operations = Array.isArray(req.body?.operations) ? req.body.operations : null;
@@ -20,13 +27,9 @@ router.post("/sync/push", async (req, res) => {
   if (shopId.length > 128 || deviceId.length > 128 || operations.length > 200 || operations.some((op: any) => !validOperation(op))) return res.status(400).json({ ok: false, error: "Invalid sync operation batch" });
 
   try {
-    // Keep serverAt strictly ahead of this shop's existing cursor so a later
-    // push in the same millisecond can never be skipped by a `since` pull.
-    const current = await db.select({ value: max(syncOperations.serverAt) })
-      .from(syncOperations).where(eq(syncOperations.shopId, shopId));
+    const current = await db.select({ value: max(syncOperations.serverAt) }).from(syncOperations).where(eq(syncOperations.shopId, shopId));
     const previous = Number(current[0]?.value ?? 0);
     const serverAt = Math.max(Date.now(), previous + 1);
-
     if (operations.length) {
       await db.insert(syncOperations).values(operations.map((op: any) => ({
         operationId: op.operationId, shopId, deviceId, entity: op.entity, entityId: op.entityId,
@@ -41,6 +44,7 @@ router.post("/sync/push", async (req, res) => {
 });
 
 router.get("/sync/pull", async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ ok: false, error: "Sync authorization required" });
   const shopId = typeof req.query.shopId === "string" ? req.query.shopId.trim() : "";
   const since = typeof req.query.since === "string" ? Number(req.query.since) : 0;
   const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 100));
