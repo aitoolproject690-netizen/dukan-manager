@@ -15,7 +15,6 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { SyncRunner } from '@/sync/SyncRunner';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -25,7 +24,6 @@ function RootLayoutNav() {
   return (
     <AppProvider>
       <DatabaseProvider>
-        <SyncRunner />
         <Stack screenOptions={{ headerBackTitle: 'Back' }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
