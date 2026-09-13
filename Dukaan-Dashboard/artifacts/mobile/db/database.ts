@@ -14,10 +14,13 @@ export function generateId(): string {
 }
 
 export async function getNextInvoiceNumber(db: SQLite.SQLiteDatabase, prefix: string = 'INV'): Promise<string> {
-  const row = await db.getFirstAsync<{ counter: number }>('SELECT counter FROM invoice_counter WHERE id = 1');
-  const next = (row?.counter ?? 0) + 1;
-  await db.runAsync('UPDATE invoice_counter SET counter = ? WHERE id = 1', [next]);
-  return `${prefix}-${String(next).padStart(4, '0')}`;
+  return db.withTransactionAsync(async () => {
+    const row = await db.getFirstAsync<{ counter: number }>('SELECT counter FROM invoice_counter WHERE id = 1');
+    const next = (row?.counter ?? 0) + 1;
+    await db.runAsync('UPDATE invoice_counter SET counter = ? WHERE id = 1', [next]);
+    return `${prefix}-${String(next).padStart(4, '0')}`;
+  }).then(() => db.getFirstAsync<{ counter: number }>('SELECT counter FROM invoice_counter WHERE id = 1'))
+    .then(row => `${prefix}-${String(row?.counter ?? 0).padStart(4, '0')}`);
 }
 
 export function startOfDay(date: Date = new Date()): number { const d = new Date(date); d.setHours(0,0,0,0); return d.getTime(); }
@@ -97,6 +100,36 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     WHEN NEW.quantity <= 0 OR NEW.price < 0 OR NEW.purchase_price < 0
     BEGIN
       SELECT RAISE(ABORT, 'Sale item values are invalid');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_sale_without_parent
+    BEFORE INSERT ON sale_items
+    WHEN (SELECT COUNT(*) FROM sales WHERE id = NEW.sale_id) = 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Sale item must belong to an existing sale');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_sale_payment_mismatch
+    BEFORE INSERT ON sales
+    WHEN ABS((COALESCE(NEW.cash_amount,0) + COALESCE(NEW.upi_amount,0) + COALESCE(NEW.credit_amount,0)) - COALESCE(NEW.total,0)) > 0.01
+      OR NEW.total < 0 OR NEW.discount < 0 OR NEW.subtotal < 0
+      OR NEW.cash_amount < 0 OR NEW.upi_amount < 0 OR NEW.credit_amount < 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Sale payment totals do not match bill total');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_credit_without_customer
+    BEFORE INSERT ON sales
+    WHEN NEW.credit_amount > 0 AND (NEW.customer_id IS NULL OR (SELECT COUNT(*) FROM customers WHERE id = NEW.customer_id) = 0)
+    BEGIN
+      SELECT RAISE(ABORT, 'Credit sale requires an existing customer');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_invalid_sale_item_product
+    BEFORE INSERT ON sale_items
+    WHEN NEW.product_id IS NOT NULL AND (SELECT COUNT(*) FROM products WHERE id = NEW.product_id) = 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Sale item product does not exist');
     END;
 
     CREATE TRIGGER IF NOT EXISTS prevent_negative_expense
