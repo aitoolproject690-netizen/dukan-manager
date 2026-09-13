@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -10,6 +10,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
+import { EasyModeBanner } from '@/components/ui/EasyModeBanner';
 import { DashboardData, Sale } from '@/types';
 import { formatCurrency, formatTime, getGreeting } from '@/utils/format';
 
@@ -44,11 +45,11 @@ export default function DashboardScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.headerBackground, paddingTop: topPad + 10 }]}>
-        <View>
+        <View style={styles.headerCopy}>
           <Text style={styles.greeting}>{getGreeting()}</Text>
           <Text style={styles.bizName} numberOfLines={1}>{settings.business_name}</Text>
         </View>
-        <TouchableOpacity style={styles.settingBtn} onPress={() => router.push('/settings')}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Settings" style={styles.settingBtn} onPress={() => router.push('/settings')}>
           <Ionicons name="settings-outline" size={20} color="rgba(255,255,255,0.9)" />
         </TouchableOpacity>
       </View>
@@ -58,6 +59,8 @@ export default function DashboardScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: botPad }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        <EasyModeBanner onPress={() => router.push('/settings')} />
+
         <Text style={[styles.section, { color: colors.mutedForeground }]}>TODAY</Text>
         <View style={styles.row}>
           <StatCard label="Sales" value={formatCurrency(data?.today_sales ?? 0, sym)} icon={<Ionicons name="trending-up" size={20} color={colors.success} />} color={colors.success} bgColor={colors.successLight} />
@@ -79,7 +82,6 @@ export default function DashboardScreen() {
           <StatCard label="Pending Credit" value={formatCurrency(data?.total_pending_credit ?? 0, sym)} icon={<Ionicons name="alert-circle" size={20} color={colors.credit} />} color={colors.credit} bgColor={colors.creditLight} onPress={() => router.push('/(tabs)/khata')} />
         </View>
 
-        {/* Quick Actions */}
         <SectionHeader title="Quick Actions" />
         <View style={styles.actions}>
           {[
@@ -88,7 +90,7 @@ export default function DashboardScreen() {
             { label: 'Add Product', icon: 'cube' as const, color: colors.accent, bg: colors.creditLight, route: '/products/add' },
             { label: 'Reports', icon: 'bar-chart' as const, color: colors.warning, bg: colors.warningLight, route: '/reports' },
           ].map(a => (
-            <TouchableOpacity key={a.label} style={[styles.action, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(a.route as any)} activeOpacity={0.75}>
+            <TouchableOpacity key={a.label} accessibilityRole="button" style={[styles.action, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(a.route as any)} activeOpacity={0.75}>
               <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
                 <Ionicons name={a.icon} size={22} color={a.color} />
               </View>
@@ -97,7 +99,6 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {/* Low Stock */}
         {settings.low_stock_alerts && lowStock.length > 0 && (
           <>
             <SectionHeader title={`⚠ Low Stock (${lowStock.length})`} action="View All" onAction={() => router.push('/(tabs)/products')} />
@@ -110,7 +111,6 @@ export default function DashboardScreen() {
           </>
         )}
 
-        {/* Recent Sales */}
         <SectionHeader title="Recent Sales" action="View All" onAction={() => router.push('/(tabs)/sales')} />
         {recentSales.length === 0 ? (
           <EmptyState icon="receipt-outline" title="No sales yet" description="Tap New Sale to create your first bill" actionLabel="New Sale" onAction={() => router.push('/billing/new')} />
@@ -137,16 +137,17 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 16, paddingBottom: 14, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  headerCopy: { flex: 1, paddingRight: 12 },
   greeting: { fontSize: 12, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.7)' },
   bizName: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff', marginTop: 2 },
-  settingBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  settingBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 16 },
   section: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 1, marginBottom: 10, marginTop: 4 },
   row: { flexDirection: 'row', marginBottom: 10 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  action: { flex: 1, minWidth: '44%', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, gap: 8 },
-  actionIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  actionLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', textAlign: 'center' },
+  action: { flex: 1, minWidth: '44%', minHeight: 112, borderRadius: 16, padding: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, gap: 8 },
+  actionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  actionLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
   alertRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 6, marginHorizontal: 16 },
   alertName: { flex: 1, fontSize: 13, fontFamily: 'Inter_500Medium' },
   alertQty: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
