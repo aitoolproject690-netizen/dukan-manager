@@ -34,6 +34,7 @@ export async function syncPendingOperations(db: SQLite.SQLiteDatabase, limit = 5
   const deviceId = await getDeviceId(db);
   let synced = 0;
   let pulled = 0;
+  let unsynced = pending;
 
   try {
     if (pending.length) {
@@ -57,15 +58,16 @@ export async function syncPendingOperations(db: SQLite.SQLiteDatabase, limit = 5
       const body = await response.json();
       if (!body?.ok || body?.persisted !== true) throw new Error(body?.message || 'Server did not confirm persistence.');
       const accepted = new Set<string>(body.accepted || []);
+      unsynced = pending.filter(op => !accepted.has(op.operation_id));
       for (const op of pending) if (accepted.has(op.operation_id)) { await markSyncOperationSynced(db, op.operation_id); synced++; }
     }
 
     pulled = await pullRemoteOperations(db, deviceId);
     await setSyncState(db, 'last_sync_at', String(Date.now()));
-    return { attempted: pending.length, synced, failed: pending.length - synced, pulled, online: true };
+    return { attempted: pending.length, synced, failed: unsynced.length, pulled, online: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    for (const op of pending) if (!op.synced_at) await markSyncOperationFailed(db, op.operation_id, message);
-    return { attempted: pending.length, synced, failed: pending.length - synced, pulled, online: false };
+    for (const op of unsynced) await markSyncOperationFailed(db, op.operation_id, message);
+    return { attempted: pending.length, synced, failed: unsynced.length, pulled, online: false };
   }
 }
