@@ -9,7 +9,7 @@ function validOperation(op: any): boolean {
     typeof op.entity === "string" && !!op.entity &&
     typeof op.entityId === "string" && !!op.entityId &&
     ["create", "update", "delete"].includes(op.operation) &&
-    typeof op.createdAt === "number";
+    typeof op.createdAt === "number" && Number.isFinite(op.createdAt);
 }
 
 router.post("/sync/push", async (req, res) => {
@@ -17,7 +17,7 @@ router.post("/sync/push", async (req, res) => {
   const deviceId = typeof req.body?.deviceId === "string" ? req.body.deviceId.trim() : "";
   const operations = Array.isArray(req.body?.operations) ? req.body.operations : null;
   if (!shopId || !deviceId || !operations) return res.status(400).json({ ok: false, error: "shopId, deviceId and operations are required" });
-  if (operations.length > 200 || operations.some((op: any) => !validOperation(op))) return res.status(400).json({ ok: false, error: "Invalid sync operation batch" });
+  if (shopId.length > 128 || deviceId.length > 128 || operations.length > 200 || operations.some((op: any) => !validOperation(op))) return res.status(400).json({ ok: false, error: "Invalid sync operation batch" });
 
   try {
     const serverAt = Date.now();
@@ -38,9 +38,10 @@ router.get("/sync/pull", async (req, res) => {
   const shopId = typeof req.query.shopId === "string" ? req.query.shopId.trim() : "";
   const since = typeof req.query.since === "string" ? Number(req.query.since) : 0;
   const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 100));
-  if (!shopId || !Number.isFinite(since) || since < 0) return res.status(400).json({ ok: false, error: "shopId and valid since are required" });
+  if (!shopId || shopId.length > 128 || !Number.isFinite(since) || since < 0) return res.status(400).json({ ok: false, error: "shopId and valid since are required" });
 
   try {
+    // Cursor is applied in SQL before LIMIT so newer operations cannot be hidden by old records.
     const rows = await db.select().from(syncOperations)
       .where(and(eq(syncOperations.shopId, shopId), gt(syncOperations.serverAt, since)))
       .orderBy(asc(syncOperations.serverAt)).limit(limit);
