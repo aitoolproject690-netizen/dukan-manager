@@ -8,16 +8,30 @@ import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 
-// IMPORTANT: iOS 26 uses NativeTabs for native tabs with liquid glass support.
-// NativeTabs intentionally does NOT use custom design tokens — liquid glass
-// is a system-level appearance provided by iOS and cannot be overridden.
-// Custom brand colors are applied only on the ClassicTabLayout path (older iOS / Android / web).
+// Keep the primary navigation simple enough for first-time and older users.
+// Core shop areas are always one tap away; secondary tools stay under More.
 function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: 'house', selected: 'house.fill' }} />
         <Label>Home</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="sales">
+        <Icon sf={{ default: 'cart', selected: 'cart.fill' }} />
+        <Label>Sales</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="products">
+        <Icon sf={{ default: 'shippingbox', selected: 'shippingbox.fill' }} />
+        <Label>Stock</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="khata">
+        <Icon sf={{ default: 'book.closed', selected: 'book.closed.fill' }} />
+        <Label>Khata</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="more">
+        <Icon sf={{ default: 'ellipsis.circle', selected: 'ellipsis.circle.fill' }} />
+        <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -70,6 +84,54 @@ function ClassicTabLayout() {
               <SymbolView name="house" tintColor={color} size={24} />
             ) : (
               <Feather name="home" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="sales"
+        options={{
+          title: 'Sales',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="cart" tintColor={color} size={23} />
+            ) : (
+              <Feather name="shopping-cart" size={21} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="products"
+        options={{
+          title: 'Stock',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="shippingbox" tintColor={color} size={23} />
+            ) : (
+              <Feather name="package" size={21} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="khata"
+        options={{
+          title: 'Khata',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="book.closed" tintColor={color} size={23} />
+            ) : (
+              <Feather name="book-open" size={21} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: 'More',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="ellipsis.circle" tintColor={color} size={23} />
+            ) : (
+              <Feather name="more-horizontal" size={22} color={color} />
             ),
         }}
       />
