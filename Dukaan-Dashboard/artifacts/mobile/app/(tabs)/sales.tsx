@@ -23,18 +23,24 @@ export default function SalesScreen() {
   const [period, setPeriod] = useState<Period>('today');
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const sym = settings.currency_symbol;
 
   const load = useCallback(async () => {
     setLoading(true);
-    let start: number | undefined, end: number | undefined;
-    const now = new Date();
-    if (period === 'today') { start = startOfDay(now); end = endOfDay(now); }
-    else if (period === 'week') { start = startOfWeek(now); end = endOfDay(now); }
-    else if (period === 'month') { start = startOfMonth(now); end = endOfMonth(now); }
-    const data = await getSales(start, end);
-    setSales(data);
-    setLoading(false);
+    try {
+      let start: number | undefined, end: number | undefined;
+      const now = new Date();
+      if (period === 'today') { start = startOfDay(now); end = endOfDay(now); }
+      else if (period === 'week') { start = startOfWeek(now); end = endOfDay(now); }
+      else if (period === 'month') { start = startOfMonth(now); end = endOfMonth(now); }
+      const data = await getSales(start, end);
+      setSales(data);
+    } catch (e) {
+      Alert.alert('Sales Error', 'Sales could not be loaded. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [getSales, period]);
 
   useEffect(() => { load(); }, [load]);
@@ -45,17 +51,25 @@ export default function SalesScreen() {
   const creditTotal = useMemo(() => sales.reduce((s, r) => s + r.credit_amount, 0), [sales]);
 
   const handleDelete = useCallback((id: string) => {
-    Alert.alert('Delete Sale', 'Are you sure? This will restore stock and remove credit entries.', [
+    if (deleting) return;
+    Alert.alert('Delete Sale', 'Are you sure? Stock will be restored and linked credit entries should be removed.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          await deleteSale(id);
-          load();
+          setDeleting(true);
+          try {
+            await deleteSale(id);
+            await load();
+          } catch (e) {
+            Alert.alert('Delete Failed', 'The sale was not deleted. Your stock and khata data were left unchanged where possible.');
+          } finally {
+            setDeleting(false);
+          }
         }
       }
     ]);
-  }, [deleteSale, load]);
+  }, [deleteSale, load, deleting]);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 + 80 : insets.bottom + 80;
@@ -71,25 +85,17 @@ export default function SalesScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.headerBackground, paddingTop: topPad + 10 }]}>
         <Text style={styles.title}>Sales</Text>
-        {sales.length > 0 && (
-          <Text style={styles.totalText}>{formatCurrencyFull(total, sym)}</Text>
-        )}
+        {sales.length > 0 && <Text style={styles.totalText}>{formatCurrencyFull(total, sym)}</Text>}
       </View>
 
-      {/* Period Tabs */}
       <View style={[styles.tabs, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         {PERIODS.map(p => (
-          <TouchableOpacity
-            key={p.key}
-            style={[styles.tab, period === p.key && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]}
-            onPress={() => setPeriod(p.key)}
-          >
+          <TouchableOpacity key={p.key} style={[styles.tab, period === p.key && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]} onPress={() => setPeriod(p.key)}>
             <Text style={[styles.tabText, { color: period === p.key ? colors.accent : colors.mutedForeground }]}>{p.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Summary pills */}
       {sales.length > 0 && (
         <View style={[styles.pills, { backgroundColor: colors.card }]}>
           {[
@@ -114,6 +120,7 @@ export default function SalesScreen() {
             onPress={() => router.push(`/billing/${item.id}` as any)}
             onLongPress={() => handleDelete(item.id)}
             activeOpacity={0.8}
+            disabled={deleting}
           >
             <View style={styles.cardLeft}>
               <Text style={[styles.invoice, { color: colors.primary }]}>{item.invoice_number}</Text>
@@ -126,17 +133,9 @@ export default function SalesScreen() {
             </View>
           </TouchableOpacity>
         )}
-        ListEmptyComponent={
-          loading ? null : (
-            <EmptyState
-              icon="receipt-outline"
-              title="No sales"
-              description={period === 'today' ? 'No bills created today' : `No bills in this period`}
-              actionLabel="Create Bill"
-              onAction={() => router.push('/billing/new')}
-            />
-          )
-        }
+        ListEmptyComponent={loading ? null : (
+          <EmptyState icon="receipt-outline" title="No sales" description={period === 'today' ? 'No bills created today' : 'No bills in this period'} actionLabel="Create Bill" onAction={() => router.push('/billing/new')} />
+        )}
         contentContainerStyle={{ padding: 16, paddingBottom: botPad }}
         showsVerticalScrollIndicator={false}
       />
