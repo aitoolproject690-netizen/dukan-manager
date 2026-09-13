@@ -2,6 +2,7 @@ export interface Customer {
   id: string;
   name: string;
   mobile: string;
+  photo_uri: string;
   address: string;
   notes: string;
   credit_balance: number;
