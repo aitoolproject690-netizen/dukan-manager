@@ -52,7 +52,7 @@ export default function SalesScreen() {
 
   const handleDelete = useCallback((id: string) => {
     if (deleting) return;
-    Alert.alert('Delete Sale', 'Are you sure? Stock will be restored and linked credit entries should be removed.', [
+    Alert.alert('Delete Sale', 'Delete this bill? Stock will be restored and its linked khata credit will be removed.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
@@ -62,7 +62,7 @@ export default function SalesScreen() {
             await deleteSale(id);
             await load();
           } catch (e) {
-            Alert.alert('Delete Failed', 'The sale was not deleted. Your stock and khata data were left unchanged where possible.');
+            Alert.alert('Delete Failed', 'The bill could not be deleted. No further changes were made by this screen.');
           } finally {
             setDeleting(false);
           }
@@ -84,13 +84,21 @@ export default function SalesScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.headerBackground, paddingTop: topPad + 10 }]}>
-        <Text style={styles.title}>Sales</Text>
+        <View style={styles.headerTitleRow}>
+          <View style={[styles.headerIcon, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
+            <Ionicons name="receipt-outline" size={22} color="#fff" />
+          </View>
+          <View>
+            <Text style={styles.title}>Sales</Text>
+            <Text style={styles.subtitle}>Bills & payments</Text>
+          </View>
+        </View>
         {sales.length > 0 && <Text style={styles.totalText}>{formatCurrencyFull(total, sym)}</Text>}
       </View>
 
       <View style={[styles.tabs, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         {PERIODS.map(p => (
-          <TouchableOpacity key={p.key} style={[styles.tab, period === p.key && { borderBottomColor: colors.accent, borderBottomWidth: 2 }]} onPress={() => setPeriod(p.key)}>
+          <TouchableOpacity key={p.key} style={[styles.tab, period === p.key && { borderBottomColor: colors.accent, borderBottomWidth: 3 }]} onPress={() => setPeriod(p.key)}>
             <Text style={[styles.tabText, { color: period === p.key ? colors.accent : colors.mutedForeground }]}>{p.label}</Text>
           </TouchableOpacity>
         ))}
@@ -122,6 +130,9 @@ export default function SalesScreen() {
             activeOpacity={0.8}
             disabled={deleting}
           >
+            <View style={[styles.receiptIcon, { backgroundColor: colors.background }]}>
+              <Ionicons name="receipt" size={21} color={colors.primary} />
+            </View>
             <View style={styles.cardLeft}>
               <Text style={[styles.invoice, { color: colors.primary }]}>{item.invoice_number}</Text>
               {item.customer_name ? <Text style={[styles.customer, { color: colors.mutedForeground }]} numberOfLines={1}>{item.customer_name}</Text> : null}
@@ -136,6 +147,12 @@ export default function SalesScreen() {
         ListEmptyComponent={loading ? null : (
           <EmptyState icon="receipt-outline" title="No sales" description={period === 'today' ? 'No bills created today' : 'No bills in this period'} actionLabel="Create Bill" onAction={() => router.push('/billing/new')} />
         )}
+        ListHeaderComponent={sales.length > 0 ? (
+          <View style={styles.hintRow}>
+            <Ionicons name="information-circle-outline" size={17} color={colors.mutedForeground} />
+            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>Tap a bill to open it · Hold a bill to delete</Text>
+          </View>
+        ) : null}
         contentContainerStyle={{ padding: 16, paddingBottom: botPad }}
         showsVerticalScrollIndicator={false}
       />
@@ -147,16 +164,22 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 16, paddingBottom: 14, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 20, fontFamily: 'Inter_700Bold', color: '#fff' },
+  subtitle: { fontSize: 11, fontFamily: 'Inter_400Regular', color: 'rgba(255,255,255,0.72)', marginTop: 1 },
   totalText: { fontSize: 18, fontFamily: 'Inter_700Bold', color: '#fff' },
   tabs: { flexDirection: 'row', borderBottomWidth: 1 },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
-  pills: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 0, borderBottomWidth: 1 },
+  tab: { flex: 1, paddingVertical: 13, alignItems: 'center' },
+  tabText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  pills: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1 },
   pill: { flex: 1, alignItems: 'center' },
   pillLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  pillValue: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 2 },
-  card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
+  pillValue: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 3 },
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2, paddingBottom: 10 },
+  hintText: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  card: { flexDirection: 'row', alignItems: 'center', minHeight: 76, padding: 12, borderRadius: 14, borderWidth: 1, marginBottom: 9, gap: 10 },
+  receiptIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   cardLeft: { flex: 1 },
   cardRight: { alignItems: 'flex-end', gap: 6 },
   invoice: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
