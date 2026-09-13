@@ -77,6 +77,41 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     BEGIN
       SELECT RAISE(ABORT, 'Product values cannot be negative');
     END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_invalid_product_updates
+    BEFORE UPDATE OF purchase_price, selling_price, stock, low_stock_alert ON products
+    WHEN NEW.purchase_price < 0 OR NEW.selling_price < 0 OR NEW.stock < 0 OR NEW.low_stock_alert < 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Product values cannot be negative');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_invalid_khata_transaction
+    BEFORE INSERT ON khata_transactions
+    WHEN NEW.amount <= 0 OR NEW.type NOT IN ('credit', 'payment')
+    BEGIN
+      SELECT RAISE(ABORT, 'Khata transaction must have a positive amount and valid type');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_invalid_sale_item
+    BEFORE INSERT ON sale_items
+    WHEN NEW.quantity <= 0 OR NEW.price < 0 OR NEW.purchase_price < 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Sale item values are invalid');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_negative_expense
+    BEFORE INSERT ON expenses
+    WHEN NEW.amount <= 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS prevent_invalid_expense_update
+    BEFORE UPDATE OF amount ON expenses
+    WHEN NEW.amount <= 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
+    END;
   `);
 }
 
