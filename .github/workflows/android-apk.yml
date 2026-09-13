@@ -9,9 +9,10 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       NODE_ENV: production
+      ANDROID_PACKAGE: com.dukkaan.manager
     defaults:
       run:
         working-directory: Dukaan-Dashboard
@@ -63,6 +64,35 @@ jobs:
           test -n "$APK"
           test -s "$APK"
           echo "Verified release APK: $APK"
+
+      - name: Android emulator launch smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          force-avd-creation: true
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            APK="$GITHUB_WORKSPACE/Dukaan-Dashboard/artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk"
+            adb install -r "$APK"
+            adb shell am force-stop "$ANDROID_PACKAGE"
+            adb shell monkey -p "$ANDROID_PACKAGE" 1
+            sleep 20
+            echo "--- TOP ACTIVITY ---"
+            adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" || true
+            echo "--- PROCESS ---"
+            adb shell pidof "$ANDROID_PACKAGE" || (echo "APP PROCESS NOT RUNNING"; adb logcat -d -v time | tail -n 400; exit 1)
+            echo "--- CRASH CHECK ---"
+            adb logcat -d -v time > /tmp/dukaan-logcat.txt
+            if grep -E "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: $ANDROID_PACKAGE .*has died|Fatal signal" /tmp/dukaan-logcat.txt; then
+              echo "ANDROID RUNTIME CRASH DETECTED"
+              tail -n 500 /tmp/dukaan-logcat.txt
+              exit 1
+            fi
+            echo "Android launch smoke test passed."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
