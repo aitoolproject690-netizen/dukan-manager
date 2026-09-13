@@ -3,18 +3,12 @@ import { Tabs } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
-/**
- * Stable cross-platform navigation.
- *
- * Avoids the experimental native-tabs / glass-effect / symbols stack on Android.
- * The shop only needs the regular Expo Router tabs and Feather icons here.
- */
 export default function TabLayout() {
   const colors = useColors();
 
   return (
     <Tabs
-      screenOptions={({ route }) => ({
+      screenOptions={{
         headerShown: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
@@ -24,23 +18,43 @@ export default function TabLayout() {
           borderTopWidth: 1,
           elevation: 0,
         },
-        tabBarIcon: ({ color, size }) => {
-          const icons: Record<string, React.ComponentProps<typeof Feather>['name']> = {
-            index: 'home',
-            sales: 'shopping-cart',
-            products: 'package',
-            khata: 'book-open',
-            more: 'more-horizontal',
-          };
-          return <Feather name={icons[route.name] ?? 'circle'} size={size} color={color} />;
-        },
-      })}
+      }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="sales" options={{ title: 'Sales' }} />
-      <Tabs.Screen name="products" options={{ title: 'Stock' }} />
-      <Tabs.Screen name="khata" options={{ title: 'Khata' }} />
-      <Tabs.Screen name="more" options={{ title: 'More' }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sales"
+        options={{
+          title: 'Sales',
+          tabBarIcon: ({ color }) => <Feather name="shopping-cart" size={21} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="products"
+        options={{
+          title: 'Stock',
+          tabBarIcon: ({ color }) => <Feather name="package" size={21} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="khata"
+        options={{
+          title: 'Khata',
+          tabBarIcon: ({ color }) => <Feather name="book-open" size={21} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: 'More',
+          tabBarIcon: ({ color }) => <Feather name="more-horizontal" size={22} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }
