@@ -12,7 +12,7 @@ export interface Customer {
 
 export interface Product { id:string; name:string; barcode:string; purchase_price:number; selling_price:number; stock:number; low_stock_alert:number; unit:string; created_at:number; updated_at:number; }
 export interface Sale { id:string; customer_id:string|null; customer_name:string; invoice_number:string; subtotal:number; discount:number; total:number; payment_method:'cash'|'upi'|'credit'|'mixed'; cash_amount:number; upi_amount:number; credit_amount:number; notes:string; date:number; created_at:number; items?:SaleItem[]; }
-export interface SaleItem { id:string; sale_id:string; product_id:string|null; product_name:string; quantity:number; price:number; purchase_price:number; }
+export interface SaleItem { id:string; sale_id:string; product_id:string|null; product_name:string; quantity:number; price:number; purchase_price:number; unit?:string; }
 export interface KhataTransaction { id:string; customer_id:string; type:'credit'|'payment'; amount:number; note:string; date:number; created_at:number; }
 export interface Expense { id:string; category:string; amount:number; note:string; date:number; created_at:number; }
 export interface DashboardData { today_sales:number; today_profit:number; today_cash:number; today_upi:number; today_credit:number; total_pending_credit:number; monthly_sales:number; monthly_profit:number; monthly_expenses:number; today_expenses:number; }
