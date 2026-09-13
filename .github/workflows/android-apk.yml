@@ -40,6 +40,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Typecheck mobile
+        run: pnpm --filter @workspace/mobile typecheck
+
+      - name: Validate Android production bundle
+        run: rm -rf /tmp/dukaan-export && CI=1 pnpm --filter @workspace/mobile exec expo export --platform android --output-dir /tmp/dukaan-export
+
       - name: Clean generated Android project
         run: rm -rf artifacts/mobile/android
 
@@ -55,6 +61,7 @@ jobs:
         run: |
           APK=$(find artifacts/mobile/android/app/build/outputs/apk/release -name '*.apk' | head -n 1)
           test -n "$APK"
+          test -s "$APK"
           echo "Verified release APK: $APK"
 
       - name: Upload APK
