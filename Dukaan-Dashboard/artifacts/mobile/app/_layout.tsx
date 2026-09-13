@@ -1,9 +1,12 @@
 import React, { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AppProvider } from '@/context/AppContext';
+import { DatabaseProvider } from '@/context/DatabaseContext';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -15,18 +18,20 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SyncRunner } from '@/sync/SyncRunner';
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <>
-      <SyncRunner />
-      <Stack screenOptions={{ headerBackTitle: 'Back' }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-    </>
+    <AppProvider>
+      <DatabaseProvider>
+        <SyncRunner />
+        <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+      </DatabaseProvider>
+    </AppProvider>
   );
 }
 
@@ -39,7 +44,9 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) SplashScreen.hideAsync();
+    if (fontsLoaded || fontError) {
+      void SplashScreen.hideAsync();
+    }
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
@@ -48,7 +55,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView>
+          <GestureHandlerRootView style={styles.root}>
             <KeyboardProvider>
               <RootLayoutNav />
             </KeyboardProvider>
@@ -58,3 +65,7 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
