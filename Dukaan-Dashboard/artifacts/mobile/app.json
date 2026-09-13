@@ -2,7 +2,7 @@
   "expo": {
     "name": "Dukaan Manager",
     "slug": "mobile",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "dukaan-manager",
@@ -16,7 +16,9 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "com.dukkaan.manager"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
