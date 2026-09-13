@@ -59,13 +59,23 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     CREATE TABLE IF NOT EXISTS invoice_counter (id INTEGER PRIMARY KEY, counter INTEGER DEFAULT 0);
     INSERT OR IGNORE INTO invoice_counter (id, counter) VALUES (1, 0);
 
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, entity TEXT NOT NULL, entity_id TEXT NOT NULL,
+      operation TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL, retry_count INTEGER DEFAULT 0,
+      last_error TEXT DEFAULT '', synced_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key TEXT PRIMARY KEY, value TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_pending ON sync_queue(synced_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON sync_queue(entity, entity_id);
+
     CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
     CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
     CREATE INDEX IF NOT EXISTS idx_khata_customer_date ON khata_transactions(customer_id, date);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
   `);
 
-  // Backward-compatible migration for databases created before customer photos existed.
   const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(customers)');
   if (!columns.some(c => c.name === 'photo_uri')) {
     await db.execAsync("ALTER TABLE customers ADD COLUMN photo_uri TEXT DEFAULT ''");
@@ -120,6 +130,34 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
       SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
     END;
   `);
+}
+
+export async function enqueueSyncOperation(db: SQLite.SQLiteDatabase, input: { operationId: string; entity: string; entityId: string; operation: 'create'|'update'|'delete'; payload: unknown }): Promise<void> {
+  await db.runAsync(
+    'INSERT OR IGNORE INTO sync_queue (id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at) VALUES (?,?,?,?,?,?,?,0,?,NULL)',
+    [generateId(), input.operationId, input.entity, input.entityId, input.operation, JSON.stringify(input.payload), Date.now(), '']
+  );
+}
+
+export async function getPendingSyncOperations(db: SQLite.SQLiteDatabase, limit = 50): Promise<Array<{ id:string; operation_id:string; entity:string; entity_id:string; operation:string; payload:string; created_at:number; retry_count:number; last_error:string }>> {
+  return db.getAllAsync('SELECT id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error FROM sync_queue WHERE synced_at IS NULL ORDER BY created_at ASC LIMIT ?', [Math.max(1, Math.min(limit, 200))]);
+}
+
+export async function markSyncOperationSynced(db: SQLite.SQLiteDatabase, operationId: string): Promise<void> {
+  await db.runAsync('UPDATE sync_queue SET synced_at=?,last_error=? WHERE operation_id=?', [Date.now(), '', operationId]);
+}
+
+export async function markSyncOperationFailed(db: SQLite.SQLiteDatabase, operationId: string, error: string): Promise<void> {
+  await db.runAsync('UPDATE sync_queue SET retry_count=retry_count+1,last_error=? WHERE operation_id=?', [String(error).slice(0, 500), operationId]);
+}
+
+export async function getSyncState(db: SQLite.SQLiteDatabase, key: string): Promise<string | null> {
+  const row = await db.getFirstAsync<{ value:string }>('SELECT value FROM sync_state WHERE key=?', [key]);
+  return row?.value ?? null;
+}
+
+export async function setSyncState(db: SQLite.SQLiteDatabase, key: string, value: string): Promise<void> {
+  await db.runAsync('INSERT OR REPLACE INTO sync_state (key,value) VALUES (?,?)', [key, value]);
 }
 
 export async function exportDatabaseJSON(db: SQLite.SQLiteDatabase): Promise<string> {
