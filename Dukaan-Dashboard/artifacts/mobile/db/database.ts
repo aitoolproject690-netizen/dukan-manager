@@ -34,7 +34,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     PRAGMA journal_mode = WAL;
 
     CREATE TABLE IF NOT EXISTS customers (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, mobile TEXT DEFAULT '', address TEXT DEFAULT '', notes TEXT DEFAULT '',
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, mobile TEXT DEFAULT '', photo_uri TEXT DEFAULT '', address TEXT DEFAULT '', notes TEXT DEFAULT '',
       credit_balance REAL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS products (
@@ -63,83 +63,60 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
     CREATE INDEX IF NOT EXISTS idx_khata_customer_date ON khata_transactions(customer_id, date);
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+  `);
 
+  // Backward-compatible migration for databases created before customer photos existed.
+  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(customers)');
+  if (!columns.some(c => c.name === 'photo_uri')) {
+    await db.execAsync("ALTER TABLE customers ADD COLUMN photo_uri TEXT DEFAULT ''");
+  }
+
+  await db.execAsync(`
     CREATE TRIGGER IF NOT EXISTS prevent_negative_product_stock
-    BEFORE UPDATE OF stock ON products
-    WHEN NEW.stock < 0
-    BEGIN
+    BEFORE UPDATE OF stock ON products WHEN NEW.stock < 0 BEGIN
       SELECT RAISE(ABORT, 'Insufficient stock: stock cannot be negative');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_negative_product_values
-    BEFORE INSERT ON products
-    WHEN NEW.purchase_price < 0 OR NEW.selling_price < 0 OR NEW.stock < 0 OR NEW.low_stock_alert < 0
-    BEGIN
+    BEFORE INSERT ON products WHEN NEW.purchase_price < 0 OR NEW.selling_price < 0 OR NEW.stock < 0 OR NEW.low_stock_alert < 0 BEGIN
       SELECT RAISE(ABORT, 'Product values cannot be negative');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_product_updates
     BEFORE UPDATE OF purchase_price, selling_price, stock, low_stock_alert ON products
-    WHEN NEW.purchase_price < 0 OR NEW.selling_price < 0 OR NEW.stock < 0 OR NEW.low_stock_alert < 0
-    BEGIN
+    WHEN NEW.purchase_price < 0 OR NEW.selling_price < 0 OR NEW.stock < 0 OR NEW.low_stock_alert < 0 BEGIN
       SELECT RAISE(ABORT, 'Product values cannot be negative');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_khata_transaction
-    BEFORE INSERT ON khata_transactions
-    WHEN NEW.amount <= 0 OR NEW.type NOT IN ('credit', 'payment')
-    BEGIN
+    BEFORE INSERT ON khata_transactions WHEN NEW.amount <= 0 OR NEW.type NOT IN ('credit', 'payment') BEGIN
       SELECT RAISE(ABORT, 'Khata transaction must have a positive amount and valid type');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_sale_item
-    BEFORE INSERT ON sale_items
-    WHEN NEW.quantity <= 0 OR NEW.price < 0 OR NEW.purchase_price < 0
-    BEGIN
+    BEFORE INSERT ON sale_items WHEN NEW.quantity <= 0 OR NEW.price < 0 OR NEW.purchase_price < 0 BEGIN
       SELECT RAISE(ABORT, 'Sale item values are invalid');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_sale_without_parent
-    BEFORE INSERT ON sale_items
-    WHEN (SELECT COUNT(*) FROM sales WHERE id = NEW.sale_id) = 0
-    BEGIN
+    BEFORE INSERT ON sale_items WHEN (SELECT COUNT(*) FROM sales WHERE id = NEW.sale_id) = 0 BEGIN
       SELECT RAISE(ABORT, 'Sale item must belong to an existing sale');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_sale_payment_mismatch
     BEFORE INSERT ON sales
     WHEN ABS((COALESCE(NEW.cash_amount,0) + COALESCE(NEW.upi_amount,0) + COALESCE(NEW.credit_amount,0)) - COALESCE(NEW.total,0)) > 0.01
-      OR NEW.total < 0 OR NEW.discount < 0 OR NEW.subtotal < 0
-      OR NEW.cash_amount < 0 OR NEW.upi_amount < 0 OR NEW.credit_amount < 0
-    BEGIN
+      OR NEW.total < 0 OR NEW.discount < 0 OR NEW.subtotal < 0 OR NEW.cash_amount < 0 OR NEW.upi_amount < 0 OR NEW.credit_amount < 0 BEGIN
       SELECT RAISE(ABORT, 'Sale payment totals do not match bill total');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_credit_without_customer
-    BEFORE INSERT ON sales
-    WHEN NEW.credit_amount > 0 AND (NEW.customer_id IS NULL OR (SELECT COUNT(*) FROM customers WHERE id = NEW.customer_id) = 0)
-    BEGIN
+    BEFORE INSERT ON sales WHEN NEW.credit_amount > 0 AND (NEW.customer_id IS NULL OR (SELECT COUNT(*) FROM customers WHERE id = NEW.customer_id) = 0) BEGIN
       SELECT RAISE(ABORT, 'Credit sale requires an existing customer');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_sale_item_product
-    BEFORE INSERT ON sale_items
-    WHEN NEW.product_id IS NOT NULL AND (SELECT COUNT(*) FROM products WHERE id = NEW.product_id) = 0
-    BEGIN
+    BEFORE INSERT ON sale_items WHEN NEW.product_id IS NOT NULL AND (SELECT COUNT(*) FROM products WHERE id = NEW.product_id) = 0 BEGIN
       SELECT RAISE(ABORT, 'Sale item product does not exist');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_negative_expense
-    BEFORE INSERT ON expenses
-    WHEN NEW.amount <= 0
-    BEGIN
+    BEFORE INSERT ON expenses WHEN NEW.amount <= 0 BEGIN
       SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
     END;
-
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_expense_update
-    BEFORE UPDATE OF amount ON expenses
-    WHEN NEW.amount <= 0
-    BEGIN
+    BEFORE UPDATE OF amount ON expenses WHEN NEW.amount <= 0 BEGIN
       SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
     END;
   `);
@@ -161,7 +138,7 @@ export async function importDatabaseJSON(db: SQLite.SQLiteDatabase, json: string
   const data=JSON.parse(json);
   await db.withTransactionAsync(async()=>{
     await db.execAsync(`DELETE FROM sale_items; DELETE FROM khata_transactions; DELETE FROM sales; DELETE FROM customers; DELETE FROM products; DELETE FROM expenses; DELETE FROM settings; DELETE FROM invoice_counter;`);
-    for(const c of data.customers??[]) await db.runAsync('INSERT OR REPLACE INTO customers VALUES (?,?,?,?,?,?,?,?)',[c.id,c.name,c.mobile,c.address,c.notes,c.credit_balance,c.created_at,c.updated_at]);
+    for(const c of data.customers??[]) await db.runAsync('INSERT OR REPLACE INTO customers (id,name,mobile,photo_uri,address,notes,credit_balance,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)',[c.id,c.name,c.mobile||'',c.photo_uri||'',c.address||'',c.notes||'',c.credit_balance||0,c.created_at,c.updated_at]);
     for(const p of data.products??[]) await db.runAsync('INSERT OR REPLACE INTO products VALUES (?,?,?,?,?,?,?,?,?,?)',[p.id,p.name,p.barcode,p.purchase_price,p.selling_price,p.stock,p.low_stock_alert,p.unit,p.created_at,p.updated_at]);
     for(const s of data.sales??[]) await db.runAsync('INSERT OR REPLACE INTO sales VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[s.id,s.customer_id,s.customer_name,s.invoice_number,s.subtotal,s.discount,s.total,s.payment_method,s.cash_amount,s.upi_amount,s.credit_amount,s.notes,s.date,s.created_at]);
     for(const si of data.saleItems??[]) await db.runAsync('INSERT OR REPLACE INTO sale_items VALUES (?,?,?,?,?,?,?)',[si.id,si.sale_id,si.product_id,si.product_name,si.quantity,si.price,si.purchase_price]);
