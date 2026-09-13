@@ -64,9 +64,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
       operation TEXT NOT NULL, payload TEXT NOT NULL, created_at INTEGER NOT NULL, retry_count INTEGER DEFAULT 0,
       last_error TEXT DEFAULT '', synced_at INTEGER
     );
-    CREATE TABLE IF NOT EXISTS sync_state (
-      key TEXT PRIMARY KEY, value TEXT NOT NULL
-    );
+    CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_sync_queue_pending ON sync_queue(synced_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_sync_queue_entity ON sync_queue(entity, entity_id);
 
@@ -99,6 +97,10 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     BEFORE INSERT ON khata_transactions WHEN NEW.amount <= 0 OR NEW.type NOT IN ('credit', 'payment') BEGIN
       SELECT RAISE(ABORT, 'Khata transaction must have a positive amount and valid type');
     END;
+    CREATE TRIGGER IF NOT EXISTS prevent_sale_item_product
+    BEFORE INSERT ON sale_items WHEN NEW.product_id IS NOT NULL AND (SELECT COUNT(*) FROM products WHERE id = NEW.product_id) = 0 BEGIN
+      SELECT RAISE(ABORT, 'Sale item product does not exist');
+    END;
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_sale_item
     BEFORE INSERT ON sale_items WHEN NEW.quantity <= 0 OR NEW.price < 0 OR NEW.purchase_price < 0 BEGIN
       SELECT RAISE(ABORT, 'Sale item values are invalid');
@@ -117,10 +119,6 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     BEFORE INSERT ON sales WHEN NEW.credit_amount > 0 AND (NEW.customer_id IS NULL OR (SELECT COUNT(*) FROM customers WHERE id = NEW.customer_id) = 0) BEGIN
       SELECT RAISE(ABORT, 'Credit sale requires an existing customer');
     END;
-    CREATE TRIGGER IF NOT EXISTS prevent_invalid_sale_item_product
-    BEFORE INSERT ON sale_items WHEN NEW.product_id IS NOT NULL AND (SELECT COUNT(*) FROM products WHERE id = NEW.product_id) = 0 BEGIN
-      SELECT RAISE(ABORT, 'Sale item product does not exist');
-    END;
     CREATE TRIGGER IF NOT EXISTS prevent_negative_expense
     BEFORE INSERT ON expenses WHEN NEW.amount <= 0 BEGIN
       SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
@@ -128,6 +126,98 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     CREATE TRIGGER IF NOT EXISTS prevent_invalid_expense_update
     BEFORE UPDATE OF amount ON expenses WHEN NEW.amount <= 0 BEGIN
       SELECT RAISE(ABORT, 'Expense amount must be greater than zero');
+    END;
+
+    /* Local-first outbox: every business mutation is captured automatically.
+       Remote apply sets sync_applying=1, so these triggers do not echo remote changes. */
+    CREATE TRIGGER IF NOT EXISTS sync_customer_insert AFTER INSERT ON customers
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('customer:'||NEW.id,'customer:'||NEW.id,'customer',NEW.id,'create',json_object('id',NEW.id,'name',NEW.name,'mobile',NEW.mobile,'photo_uri',NEW.photo_uri,'address',NEW.address,'notes',NEW.notes,'credit_balance',NEW.credit_balance,'created_at',NEW.created_at,'updated_at',NEW.updated_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_customer_update AFTER UPDATE ON customers
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('customer:'||NEW.id,'customer:'||NEW.id,'customer',NEW.id,'update',json_object('id',NEW.id,'name',NEW.name,'mobile',NEW.mobile,'photo_uri',NEW.photo_uri,'address',NEW.address,'notes',NEW.notes,'credit_balance',NEW.credit_balance,'created_at',NEW.created_at,'updated_at',NEW.updated_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_customer_delete AFTER DELETE ON customers
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('customer:'||OLD.id,'customer:'||OLD.id,'customer',OLD.id,'delete',json_object('id',OLD.id),strftime('%s','now')*1000,0,'',NULL);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS sync_product_insert AFTER INSERT ON products
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('product:'||NEW.id,'product:'||NEW.id,'product',NEW.id,'create',json_object('id',NEW.id,'name',NEW.name,'barcode',NEW.barcode,'purchase_price',NEW.purchase_price,'selling_price',NEW.selling_price,'stock',NEW.stock,'low_stock_alert',NEW.low_stock_alert,'unit',NEW.unit,'created_at',NEW.created_at,'updated_at',NEW.updated_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_product_update AFTER UPDATE ON products
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('product:'||NEW.id,'product:'||NEW.id,'product',NEW.id,'update',json_object('id',NEW.id,'name',NEW.name,'barcode',NEW.barcode,'purchase_price',NEW.purchase_price,'selling_price',NEW.selling_price,'stock',NEW.stock,'low_stock_alert',NEW.low_stock_alert,'unit',NEW.unit,'created_at',NEW.created_at,'updated_at',NEW.updated_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_product_delete AFTER DELETE ON products
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('product:'||OLD.id,'product:'||OLD.id,'product',OLD.id,'delete',json_object('id',OLD.id),strftime('%s','now')*1000,0,'',NULL);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS sync_expense_insert AFTER INSERT ON expenses
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('expense:'||NEW.id,'expense:'||NEW.id,'expense',NEW.id,'create',json_object('id',NEW.id,'category',NEW.category,'amount',NEW.amount,'note',NEW.note,'date',NEW.date,'created_at',NEW.created_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_expense_update AFTER UPDATE ON expenses
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('expense:'||NEW.id,'expense:'||NEW.id,'expense',NEW.id,'update',json_object('id',NEW.id,'category',NEW.category,'amount',NEW.amount,'note',NEW.note,'date',NEW.date,'created_at',NEW.created_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_expense_delete AFTER DELETE ON expenses
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('expense:'||OLD.id,'expense:'||OLD.id,'expense',OLD.id,'delete',json_object('id',OLD.id),strftime('%s','now')*1000,0,'',NULL);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS sync_khata_insert AFTER INSERT ON khata_transactions
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('khata:'||NEW.id,'khata:'||NEW.id,'khata_transaction',NEW.id,'create',json_object('id',NEW.id,'customer_id',NEW.customer_id,'type',NEW.type,'amount',NEW.amount,'note',NEW.note,'date',NEW.date,'created_at',NEW.created_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_khata_update AFTER UPDATE ON khata_transactions
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('khata:'||NEW.id,'khata:'||NEW.id,'khata_transaction',NEW.id,'update',json_object('id',NEW.id,'customer_id',NEW.customer_id,'type',NEW.type,'amount',NEW.amount,'note',NEW.note,'date',NEW.date,'created_at',NEW.created_at),strftime('%s','now')*1000,0,'',NULL);
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_khata_delete AFTER DELETE ON khata_transactions
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('khata:'||OLD.id,'khata:'||OLD.id,'khata_transaction',OLD.id,'delete',json_object('id',OLD.id),strftime('%s','now')*1000,0,'',NULL);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS sync_sale_items_changed AFTER INSERT ON sale_items
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      SELECT 'sale:'||s.id,'sale:'||s.id,'sale',s.id,CASE WHEN EXISTS(SELECT 1 FROM sync_queue q WHERE q.operation_id='sale:'||s.id AND q.operation='update') THEN 'update' ELSE 'create' END,
+        json_object('id',s.id,'customer_id',s.customer_id,'customer_name',s.customer_name,'invoice_number',s.invoice_number,'subtotal',s.subtotal,'discount',s.discount,'total',s.total,'payment_method',s.payment_method,'cash_amount',s.cash_amount,'upi_amount',s.upi_amount,'credit_amount',s.credit_amount,'notes',s.notes,'date',s.date,'created_at',s.created_at,'items',(SELECT json_group_array(json_object('id',si.id,'sale_id',si.sale_id,'product_id',si.product_id,'product_name',si.product_name,'quantity',si.quantity,'price',si.price,'purchase_price',si.purchase_price)) FROM sale_items si WHERE si.sale_id=s.id)),strftime('%s','now')*1000,0,'',NULL FROM sales s WHERE s.id=NEW.sale_id;
+    END;
+    CREATE TRIGGER IF NOT EXISTS sync_sale_delete AFTER DELETE ON sales
+    WHEN COALESCE((SELECT value FROM sync_state WHERE key='sync_applying'),'0') <> '1'
+    BEGIN
+      INSERT OR REPLACE INTO sync_queue(id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error,synced_at)
+      VALUES('sale:'||OLD.id,'sale:'||OLD.id,'sale',OLD.id,'delete',json_object('id',OLD.id),strftime('%s','now')*1000,0,'',NULL);
     END;
   `);
 }
@@ -140,7 +230,7 @@ export async function enqueueSyncOperation(db: SQLite.SQLiteDatabase, input: { o
 }
 
 export async function getPendingSyncOperations(db: SQLite.SQLiteDatabase, limit = 50): Promise<Array<{ id:string; operation_id:string; entity:string; entity_id:string; operation:string; payload:string; created_at:number; retry_count:number; last_error:string }>> {
-  return db.getAllAsync('SELECT id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error FROM sync_queue WHERE synced_at IS NULL ORDER BY created_at ASC LIMIT ?', [Math.max(1, Math.min(limit, 200))]);
+  return db.getAllAsync('SELECT id,operation_id,entity,entity_id,operation,payload,created_at,retry_count,last_error FROM sync_queue WHERE synced_at IS NULL ORDER BY created_at ASC, id ASC LIMIT ?', [Math.max(1, Math.min(limit, 200))]);
 }
 
 export async function markSyncOperationSynced(db: SQLite.SQLiteDatabase, operationId: string): Promise<void> {
