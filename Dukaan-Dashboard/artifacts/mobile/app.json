@@ -2,12 +2,12 @@
   "expo": {
     "name": "Dukaan Manager",
     "slug": "mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "dukaan-manager",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
