@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, syncOperations } from "@workspace/db";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, max } from "drizzle-orm";
 
 const router = Router();
 
@@ -20,7 +20,13 @@ router.post("/sync/push", async (req, res) => {
   if (shopId.length > 128 || deviceId.length > 128 || operations.length > 200 || operations.some((op: any) => !validOperation(op))) return res.status(400).json({ ok: false, error: "Invalid sync operation batch" });
 
   try {
-    const serverAt = Date.now();
+    // Keep serverAt strictly ahead of this shop's existing cursor so a later
+    // push in the same millisecond can never be skipped by a `since` pull.
+    const current = await db.select({ value: max(syncOperations.serverAt) })
+      .from(syncOperations).where(eq(syncOperations.shopId, shopId));
+    const previous = Number(current[0]?.value ?? 0);
+    const serverAt = Math.max(Date.now(), previous + 1);
+
     if (operations.length) {
       await db.insert(syncOperations).values(operations.map((op: any) => ({
         operationId: op.operationId, shopId, deviceId, entity: op.entity, entityId: op.entityId,
@@ -41,10 +47,9 @@ router.get("/sync/pull", async (req, res) => {
   if (!shopId || shopId.length > 128 || !Number.isFinite(since) || since < 0) return res.status(400).json({ ok: false, error: "shopId and valid since are required" });
 
   try {
-    // Cursor is applied in SQL before LIMIT so newer operations cannot be hidden by old records.
     const rows = await db.select().from(syncOperations)
       .where(and(eq(syncOperations.shopId, shopId), gt(syncOperations.serverAt, since)))
-      .orderBy(asc(syncOperations.serverAt)).limit(limit);
+      .orderBy(asc(syncOperations.serverAt), asc(syncOperations.operationId)).limit(limit);
     const operations = rows.map(row => ({
       operationId: row.operationId, entity: row.entity, entityId: row.entityId, operation: row.operation,
       payload: JSON.parse(row.payload), createdAt: row.createdAt, serverAt: row.serverAt, deviceId: row.deviceId,
