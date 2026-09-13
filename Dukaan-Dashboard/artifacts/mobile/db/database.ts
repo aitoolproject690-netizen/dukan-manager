@@ -14,14 +14,10 @@ export function generateId(): string {
 }
 
 export async function getNextInvoiceNumber(db: SQLite.SQLiteDatabase, prefix: string = 'INV'): Promise<string> {
-  let invoiceNumber = '';
-  await db.withTransactionAsync(async () => {
-    const row = await db.getFirstAsync<{ counter: number }>('SELECT counter FROM invoice_counter WHERE id = 1');
-    const next = (row?.counter ?? 0) + 1;
-    await db.runAsync('UPDATE invoice_counter SET counter = ? WHERE id = 1', [next]);
-    invoiceNumber = `${prefix}-${String(next).padStart(4, '0')}`;
-  });
-  return invoiceNumber;
+  const row = await db.getFirstAsync<{ counter: number }>('UPDATE invoice_counter SET counter = counter + 1 WHERE id = 1 RETURNING counter');
+  const next = row?.counter ?? 0;
+  if (next <= 0) throw new Error('Could not generate invoice number.');
+  return `${prefix}-${String(next).padStart(4, '0')}`;
 }
 
 export function startOfDay(date: Date = new Date()): number { const d = new Date(date); d.setHours(0,0,0,0); return d.getTime(); }
