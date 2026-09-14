@@ -68,7 +68,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
-          target: google_apis
+          target: google_atd
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
@@ -80,14 +80,18 @@ jobs:
             adb shell am force-stop "$ANDROID_PACKAGE"
             adb logcat -c
             adb shell monkey -p "$ANDROID_PACKAGE" 1
-            sleep 25
+            sleep 20
             echo "--- TOP ACTIVITY ---"
             adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" || true
             echo "--- PROCESS ---"
             adb shell pidof "$ANDROID_PACKAGE" >/dev/null || { echo "APP PROCESS NOT RUNNING"; adb logcat -d -v time | tail -n 500; exit 1; }
             echo "--- CRASH CHECK ---"
             adb logcat -d -v time > /tmp/dukaan-logcat.txt
-            grep -Eq "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: $ANDROID_PACKAGE .*has died|Fatal signal" /tmp/dukaan-logcat.txt && { echo "ANDROID RUNTIME CRASH DETECTED"; tail -n 500 /tmp/dukaan-logcat.txt; exit 1; } || true
+            if grep -Eq "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: $ANDROID_PACKAGE .*has died|Fatal signal" /tmp/dukaan-logcat.txt; then
+              echo "ANDROID RUNTIME CRASH DETECTED"
+              tail -n 500 /tmp/dukaan-logcat.txt
+              exit 1
+            fi
             echo "Android launch smoke test passed."
 
       - name: Upload APK
