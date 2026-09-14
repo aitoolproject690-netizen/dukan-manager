@@ -76,29 +76,18 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 900
           script: |
-            set -e
-            APK="$GITHUB_WORKSPACE/Dukaan-Dashboard/artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk"
-            echo "APK=$APK"
-            test -f "$APK"
-            adb install -r "$APK"
+            adb install -r "$GITHUB_WORKSPACE/Dukaan-Dashboard/artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk"
             adb shell am force-stop "$ANDROID_PACKAGE"
+            adb logcat -c
             adb shell monkey -p "$ANDROID_PACKAGE" 1
             sleep 25
             echo "--- TOP ACTIVITY ---"
             adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" || true
             echo "--- PROCESS ---"
-            if ! adb shell pidof "$ANDROID_PACKAGE"; then
-              echo "APP PROCESS NOT RUNNING"
-              adb logcat -d -v time | tail -n 500
-              exit 1
-            fi
+            adb shell pidof "$ANDROID_PACKAGE" >/dev/null || { echo "APP PROCESS NOT RUNNING"; adb logcat -d -v time | tail -n 500; exit 1; }
             echo "--- CRASH CHECK ---"
             adb logcat -d -v time > /tmp/dukaan-logcat.txt
-            if grep -E "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: $ANDROID_PACKAGE .*has died|Fatal signal" /tmp/dukaan-logcat.txt; then
-              echo "ANDROID RUNTIME CRASH DETECTED"
-              tail -n 500 /tmp/dukaan-logcat.txt
-              exit 1
-            fi
+            grep -Eq "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: $ANDROID_PACKAGE .*has died|Fatal signal" /tmp/dukaan-logcat.txt && { echo "ANDROID RUNTIME CRASH DETECTED"; tail -n 500 /tmp/dukaan-logcat.txt; exit 1; } || true
             echo "Android launch smoke test passed."
 
       - name: Upload APK
