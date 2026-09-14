@@ -75,36 +75,7 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           disable-animations: true
           emulator-boot-timeout: 900
-          script: |
-            set -u
-            APK="$GITHUB_WORKSPACE/Dukaan-Dashboard/artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk"
-            echo "--- INSTALL APK ---"
-            adb install -r "$APK"
-            adb shell am force-stop "$ANDROID_PACKAGE"
-            adb logcat -c
-            echo "--- LAUNCH APK ---"
-            adb shell am start -W -n "$ANDROID_PACKAGE/.MainActivity"
-            sleep 30
-            echo "--- TOP ACTIVITY ---"
-            adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" || true
-            echo "--- PACKAGE STATE ---"
-            adb shell dumpsys package "$ANDROID_PACKAGE" | grep -E "versionName|versionCode|enabled=true|Activity" | head -n 30 || true
-            echo "--- PROCESS ---"
-            if ! adb shell pidof "$ANDROID_PACKAGE" | grep -Eq '[0-9]+'; then
-              echo "APP PROCESS NOT RUNNING"
-              echo "--- ERROR LOGCAT ---"
-              adb logcat -d -b all -v time | grep -E "($ANDROID_PACKAGE|AndroidRuntime|ReactNative|ReactNativeJS|FATAL|Fatal|Exception|SIG)" | tail -n 1000 || true
-              exit 1
-            fi
-            echo "--- CRASH CHECK ---"
-            LOG=/tmp/dukaan-logcat.txt
-            adb logcat -d -b all -v time > "$LOG"
-            if grep -Eq "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: $ANDROID_PACKAGE .*has died|Fatal signal|ReactNativeJS.*(Error|Invariant Violation)|Expo native runtime is not available|Module AppRegistry is not a registered callable" "$LOG"; then
-              echo "ANDROID RUNTIME CRASH DETECTED"
-              grep -E "($ANDROID_PACKAGE|AndroidRuntime|ReactNative|ReactNativeJS|FATAL|Fatal|Exception|SIG|AppRegistry|Expo native runtime)" "$LOG" | tail -n 1000 || true
-              exit 1
-            fi
-            echo "Android launch smoke test passed."
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/android-smoke-test.sh"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
