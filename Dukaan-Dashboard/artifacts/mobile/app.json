@@ -2,12 +2,12 @@
   "expo": {
     "name": "Dukaan Manager",
     "slug": "mobile",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "dukaan-manager",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -25,7 +25,8 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true,
