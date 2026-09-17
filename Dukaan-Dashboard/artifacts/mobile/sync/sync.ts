@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { getPendingSyncOperations, getSyncState, markSyncOperationFailed, markSyncOperationSynced, setSyncState } from '@/db/database';
 import { applySyncBatch } from './applySync';
+import { ensureSyncTriggerMigration } from './syncTriggerMigration';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') || '';
 const SHOP_ID = process.env.EXPO_PUBLIC_SHOP_ID?.trim() || '';
@@ -33,6 +34,10 @@ async function pullRemoteOperations(db: SQLite.SQLiteDatabase, deviceId: string,
 }
 
 export async function syncPendingOperations(db: SQLite.SQLiteDatabase, limit = 50): Promise<SyncResult> {
+  // Initialize the hardened outbox even when the device is offline or sync
+  // environment variables are not configured yet. This keeps local mutations
+  // safe and ready to sync later instead of leaving legacy triggers active.
+  await ensureSyncTriggerMigration(db);
   if (!API_URL || !SHOP_ID || !SYNC_TOKEN) return { attempted: 0, synced: 0, failed: 0, pulled: 0, online: false };
 
   const pending = await getPendingSyncOperations(db, limit);
