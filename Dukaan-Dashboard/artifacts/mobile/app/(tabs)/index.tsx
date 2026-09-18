@@ -17,18 +17,18 @@ import { formatCurrency, formatTime, getGreeting } from '@/utils/format';
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getDashboardData, getबिक्री, getLowStockProducts } = useDatabase();
+  const { getDashboardData, getSales, getLowStockProducts } = useDatabase();
   const { settings } = useApp();
   const [data, setData] = useState<DashboardData | null>(null);
-  const [recentबिक्री, setRecentबिक्री] = useState<Sale[]>([]);
+  const [recentSales, setRecentबिक्री] = useState<Sale[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const sym = settings.currency_symbol;
 
   const load = useCallback(async () => {
-    const [d, sales] = await Promise.all([getDashboardData(), getबिक्री()]);
+    const [d, sales] = await Promise.all([getDashboardData(), getSales()]);
     setData(d);
     setRecentबिक्री(sales.slice(0, 8));
-  }, [getDashboardData, getबिक्री]);
+  }, [getDashboardData, getSales]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -112,10 +112,10 @@ export default function DashboardScreen() {
         )}
 
         <SectionHeader title="हाल की बिक्री" action="सब देखें" onAction={() => router.push('/(tabs)/sales')} />
-        {recentबिक्री.length === 0 ? (
+        {recentSales.length === 0 ? (
           <EmptyState icon="receipt-outline" title="अभी कोई बिक्री नहीं" description="Tap नई बिक्री to create your first bill" actionLabel="नई बिक्री" onAction={() => router.push('/billing/new')} />
         ) : (
-          recentबिक्री.map(sale => (
+          recentSales.map(sale => (
             <TouchableOpacity key={sale.id} style={[styles.saleRow, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/billing/${sale.id}` as any)} activeOpacity={0.8}>
               <View style={styles.saleLeft}>
                 <Text style={[styles.saleNo, { color: colors.primary }]}>{sale.invoice_number}</Text>
