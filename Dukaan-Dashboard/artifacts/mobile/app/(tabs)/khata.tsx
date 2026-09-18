@@ -47,9 +47,9 @@ export default function KhataScreen() {
         </View>
       </View>
       <View style={styles.summaryRow}>
-        <View style={[styles.summaryBox,{backgroundColor:colors.creditLight}]}><Text style={[styles.summaryLabel,{color:colors.credit}]}>Total Udhar</Text><Text style={[styles.summaryAmt,{color:colors.credit}]}>{formatCurrencyFull(totalGiven,sym)}</Text></View>
-        <View style={[styles.summaryBox,{backgroundColor:colors.successLight}]}><Text style={[styles.summaryLabel,{color:colors.success}]}>Paisa Diya</Text><Text style={[styles.summaryAmt,{color:colors.success}]}>{formatCurrencyFull(totalPaid,sym)}</Text></View>
-        <View style={[styles.summaryBox,{backgroundColor:pending>0?colors.warningLight:colors.successLight}]}><Text style={[styles.summaryLabel,{color:pending>0?colors.warning:colors.success}]}>Pending</Text><Text style={[styles.summaryAmt,{color:pending>0?colors.warning:colors.success}]}>{formatCurrencyFull(pending,sym)}</Text></View>
+        <View style={[styles.summaryBox,{backgroundColor:colors.creditLight}]}><Text style={[styles.summaryLabel,{color:colors.credit}]}>कुल उधार</Text><Text style={[styles.summaryAmt,{color:colors.credit}]}>{formatCurrencyFull(totalGiven,sym)}</Text></View>
+        <View style={[styles.summaryBox,{backgroundColor:colors.successLight}]}><Text style={[styles.summaryLabel,{color:colors.success}]}>पैसा दिया</Text><Text style={[styles.summaryAmt,{color:colors.success}]}>{formatCurrencyFull(totalPaid,sym)}</Text></View>
+        <View style={[styles.summaryBox,{backgroundColor:pending>0?colors.warningLight:colors.successLight}]}><Text style={[styles.summaryLabel,{color:pending>0?colors.warning:colors.success}]}>बाकी</Text><Text style={[styles.summaryAmt,{color:pending>0?colors.warning:colors.success}]}>{formatCurrencyFull(pending,sym)}</Text></View>
       </View>
 
       <FlatList
@@ -57,7 +57,7 @@ export default function KhataScreen() {
         keyExtractor={c => c.id}
         ListHeaderComponent={
           <View style={{ paddingTop: 12 }}>
-            <SearchBar value={search} onChangeText={setSearch} placeholder="Search customers..." />
+            <SearchBar value={search} onChangeText={setSearch} placeholder="ग्राहक का नाम या मोबाइल खोजें" />
           </View>
         }
         renderItem={({ item }) => (
@@ -70,9 +70,9 @@ export default function KhataScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="people-outline"
-            title={search ? 'No customers found' : 'No customers yet'}
-            description={search ? 'Try a different name or number' : 'Add customers to track credit'}
-            actionLabel={search ? undefined : 'Add Customer'}
+            title={search ? 'ग्राहक नहीं मिला' : 'अभी कोई ग्राहक नहीं'}
+            description={search ? 'नाम या मोबाइल नंबर बदलकर देखें' : 'पहले ग्राहक जोड़ें, फिर उसका उधार लिखें'}
+            actionLabel={search ? undefined : 'ग्राहक जोड़ें'}
             onAction={search ? undefined : () => router.push('/customers/add')}
           />
         }
