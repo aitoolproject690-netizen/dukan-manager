@@ -17,18 +17,18 @@ import { formatCurrency, formatTime, getGreeting } from '@/utils/format';
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getDashboardData, getSales, getLowStockProducts } = useDatabase();
+  const { getDashboardData, getबिक्री, getLowStockProducts } = useDatabase();
   const { settings } = useApp();
   const [data, setData] = useState<DashboardData | null>(null);
-  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [recentबिक्री, setRecentबिक्री] = useState<Sale[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const sym = settings.currency_symbol;
 
   const load = useCallback(async () => {
-    const [d, sales] = await Promise.all([getDashboardData(), getSales()]);
+    const [d, sales] = await Promise.all([getDashboardData(), getबिक्री()]);
     setData(d);
-    setRecentSales(sales.slice(0, 8));
-  }, [getDashboardData, getSales]);
+    setRecentबिक्री(sales.slice(0, 8));
+  }, [getDashboardData, getबिक्री]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -63,32 +63,32 @@ export default function DashboardScreen() {
 
         <Text style={[styles.section, { color: colors.mutedForeground }]}>TODAY</Text>
         <View style={styles.row}>
-          <StatCard label="Sales" value={formatCurrency(data?.today_sales ?? 0, sym)} icon={<Ionicons name="trending-up" size={20} color={colors.success} />} color={colors.success} bgColor={colors.successLight} />
+          <StatCard label="बिक्री" value={formatCurrency(data?.today_sales ?? 0, sym)} icon={<Ionicons name="trending-up" size={20} color={colors.success} />} color={colors.success} bgColor={colors.successLight} />
           <View style={{ width: 10 }} />
-          <StatCard label="Profit" value={formatCurrency(data?.today_profit ?? 0, sym)} icon={<Ionicons name="bar-chart" size={20} color={colors.primary} />} color={colors.primary} bgColor={colors.secondary} />
+          <StatCard label="मुनाफा" value={formatCurrency(data?.today_profit ?? 0, sym)} icon={<Ionicons name="bar-chart" size={20} color={colors.primary} />} color={colors.primary} bgColor={colors.secondary} />
         </View>
         <View style={styles.row}>
-          <StatCard label="Cash" value={formatCurrency(data?.today_cash ?? 0, sym)} icon={<MaterialCommunityIcons name="cash" size={20} color={colors.warning} />} color={colors.warning} bgColor={colors.warningLight} small />
+          <StatCard label="नकद" value={formatCurrency(data?.today_cash ?? 0, sym)} icon={<MaterialCommunityIcons name="cash" size={20} color={colors.warning} />} color={colors.warning} bgColor={colors.warningLight} small />
           <View style={{ width: 10 }} />
           <StatCard label="UPI" value={formatCurrency(data?.today_upi ?? 0, sym)} icon={<Ionicons name="phone-portrait" size={20} color={colors.accent} />} color={colors.accent} bgColor={colors.creditLight} small />
           <View style={{ width: 10 }} />
-          <StatCard label="Credit" value={formatCurrency(data?.today_credit ?? 0, sym)} icon={<Ionicons name="person" size={18} color={colors.credit} />} color={colors.credit} bgColor={colors.creditLight} small />
+          <StatCard label="उधार" value={formatCurrency(data?.today_credit ?? 0, sym)} icon={<Ionicons name="person" size={18} color={colors.credit} />} color={colors.credit} bgColor={colors.creditLight} small />
         </View>
 
         <Text style={[styles.section, { color: colors.mutedForeground, marginTop: 4 }]}>THIS MONTH</Text>
         <View style={styles.row}>
-          <StatCard label="Monthly Sales" value={formatCurrency(data?.monthly_sales ?? 0, sym)} icon={<Ionicons name="calendar" size={20} color={colors.success} />} color={colors.success} bgColor={colors.successLight} />
+          <StatCard label="इस महीने की बिक्री" value={formatCurrency(data?.monthly_sales ?? 0, sym)} icon={<Ionicons name="calendar" size={20} color={colors.success} />} color={colors.success} bgColor={colors.successLight} />
           <View style={{ width: 10 }} />
-          <StatCard label="Pending Credit" value={formatCurrency(data?.total_pending_credit ?? 0, sym)} icon={<Ionicons name="alert-circle" size={20} color={colors.credit} />} color={colors.credit} bgColor={colors.creditLight} onPress={() => router.push('/(tabs)/khata')} />
+          <StatCard label="बाकी उधार" value={formatCurrency(data?.total_pending_credit ?? 0, sym)} icon={<Ionicons name="alert-circle" size={20} color={colors.credit} />} color={colors.credit} bgColor={colors.creditLight} onPress={() => router.push('/(tabs)/khata')} />
         </View>
 
-        <SectionHeader title="Quick Actions" />
+        <SectionHeader title="जल्दी काम" />
         <View style={styles.actions}>
           {[
-            { label: 'New Sale', icon: 'add-circle' as const, color: colors.success, bg: colors.successLight, route: '/billing/new' },
-            { label: 'Add Customer', icon: 'person-add' as const, color: colors.primary, bg: colors.secondary, route: '/customers/add' },
-            { label: 'Add Product', icon: 'cube' as const, color: colors.accent, bg: colors.creditLight, route: '/products/add' },
-            { label: 'Reports', icon: 'bar-chart' as const, color: colors.warning, bg: colors.warningLight, route: '/reports' },
+            { label: 'नई बिक्री', icon: 'add-circle' as const, color: colors.success, bg: colors.successLight, route: '/billing/new' },
+            { label: 'ग्राहक जोड़ें', icon: 'person-add' as const, color: colors.primary, bg: colors.secondary, route: '/customers/add' },
+            { label: 'सामान जोड़ें', icon: 'cube' as const, color: colors.accent, bg: colors.creditLight, route: '/products/add' },
+            { label: 'रिपोर्ट', icon: 'bar-chart' as const, color: colors.warning, bg: colors.warningLight, route: '/reports' },
           ].map(a => (
             <TouchableOpacity key={a.label} accessibilityRole="button" style={[styles.action, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(a.route as any)} activeOpacity={0.75}>
               <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
@@ -101,7 +101,7 @@ export default function DashboardScreen() {
 
         {settings.low_stock_alerts && lowStock.length > 0 && (
           <>
-            <SectionHeader title={`⚠ Low Stock (${lowStock.length})`} action="View All" onAction={() => router.push('/(tabs)/products')} />
+            <SectionHeader title={`⚠ सामान कम है (${lowStock.length})`} action="सब देखें" onAction={() => router.push('/(tabs)/products')} />
             {lowStock.slice(0, 3).map(p => (
               <TouchableOpacity key={p.id} style={[styles.alertRow, { backgroundColor: colors.warningLight, borderColor: colors.warning }]} activeOpacity={0.8}>
                 <Text style={[styles.alertName, { color: colors.warning }]} numberOfLines={1}>{p.name}</Text>
@@ -111,11 +111,11 @@ export default function DashboardScreen() {
           </>
         )}
 
-        <SectionHeader title="Recent Sales" action="View All" onAction={() => router.push('/(tabs)/sales')} />
-        {recentSales.length === 0 ? (
-          <EmptyState icon="receipt-outline" title="No sales yet" description="Tap New Sale to create your first bill" actionLabel="New Sale" onAction={() => router.push('/billing/new')} />
+        <SectionHeader title="हाल की बिक्री" action="सब देखें" onAction={() => router.push('/(tabs)/sales')} />
+        {recentबिक्री.length === 0 ? (
+          <EmptyState icon="receipt-outline" title="अभी कोई बिक्री नहीं" description="Tap नई बिक्री to create your first bill" actionLabel="नई बिक्री" onAction={() => router.push('/billing/new')} />
         ) : (
-          recentSales.map(sale => (
+          recentबिक्री.map(sale => (
             <TouchableOpacity key={sale.id} style={[styles.saleRow, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => router.push(`/billing/${sale.id}` as any)} activeOpacity={0.8}>
               <View style={styles.saleLeft}>
                 <Text style={[styles.saleNo, { color: colors.primary }]}>{sale.invoice_number}</Text>
